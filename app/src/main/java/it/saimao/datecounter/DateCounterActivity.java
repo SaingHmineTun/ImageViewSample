@@ -1,9 +1,11 @@
 package it.saimao.datecounter;
 
-import android.app.AlarmManager;
-import android.content.DialogInterface;
+import android.app.DatePickerDialog;
+import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
+import android.widget.DatePicker;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
@@ -17,16 +19,26 @@ import it.saimao.datecounter.databinding.DialogUserNameInputBinding;
 
 public class DateCounterActivity extends AppCompatActivity {
 
+    private static final String MALE = "male"; // male -> Kyaw
+    private static final String FEMALE = "female";
+    private static final String SELECTED_DATE = "selected_date";
     private ActivityDateCounterBinding binding;
     private LocalDate selectedDate;
+
+    private SharedPreferences sp;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = ActivityDateCounterBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+        initSharedPreference();
         initUi();
         initListeners();
+    }
+
+    private void initSharedPreference() {
+        sp = getSharedPreferences("date_counter", MODE_PRIVATE);
     }
 
     private void initListeners() {
@@ -36,6 +48,27 @@ public class DateCounterActivity extends AppCompatActivity {
         binding.tvFemale.setOnClickListener(v -> {
             showAlertDialog(v);
         });
+
+        binding.btDate.setOnClickListener(v -> {
+            showDatePickerDialog();
+        });
+
+    }
+
+    private void showDatePickerDialog() {
+
+        DatePickerDialog datePickerDialog = new DatePickerDialog(this);
+        datePickerDialog.updateDate(selectedDate.getYear(), selectedDate.getMonthValue() - 1, selectedDate.getDayOfMonth());
+        datePickerDialog.setOnDateSetListener((view, year, month, dayOfMonth) -> {
+            Log.d("Date Picker", String.format("%d %d %d", year, month, dayOfMonth));
+            selectedDate = LocalDate.of(year, month + 1, dayOfMonth);
+            //
+            Log.d("ABC", String.format("%02d/%02d/%04d", dayOfMonth, month + 1, year));
+            saveData(SELECTED_DATE, String.format("%02d/%02d/%04d", dayOfMonth, month + 1, year));
+            updateDate();
+        });
+        datePickerDialog.show();
+
     }
 
     private void showAlertDialog(View view) {
@@ -50,7 +83,14 @@ public class DateCounterActivity extends AppCompatActivity {
         class OnDialogClick implements View.OnClickListener {
             @Override
             public void onClick(View v) {
-                textView.setText(dialogBinding.etName.getText().toString());
+                var name = dialogBinding.etName.getText().toString();
+                if (textView.getId() == R.id.tv_male) {
+                    saveData(MALE, name);
+                } else {
+                    // Female
+                    saveData(FEMALE, name);
+                }
+                textView.setText(name);
                 alertDialog.cancel();
             }
         }
@@ -60,14 +100,41 @@ public class DateCounterActivity extends AppCompatActivity {
 
     }
 
+    /*
+    Shared Preference name -
+    key : value / Map // SQLite or Room (SQL Query)
+     */
+    private void saveData(String key, String value) {
+        SharedPreferences.Editor editor = sp.edit();
+        editor.putString(key, value);
+        editor.apply();
+    }
+
+    private String read(String key) {
+
+        return sp.getString(key, "");
+    }
+
+    private String readDate() {
+        return sp.getString(SELECTED_DATE, "01/05/2024");
+    }
+
 
     private void initUi() {
         // min - 26
-        selectedDate = fromStringToLocalDate(binding.btDate.getText().toString());
+        binding.tvMale.setText(read(MALE));
+        binding.tvFemale.setText(read(FEMALE));
+        selectedDate = fromStringToLocalDate(readDate());
+        updateDate();
+    }
+
+
+    private void updateDate() {
         LocalDate todayDate = LocalDate.now(); // todayDate - selectedDate = dateBetween
-        long dateBetween = todayDate.toEpochDay() - selectedDate.toEpochDay();
+        long dateBetween = todayDate.toEpochDay() - selectedDate.toEpochDay(); // 1970 Jan 1
         String days = dateBetween > 1 ? dateBetween + " Days" : dateBetween + " Day";
         binding.tvDateBetween.setText(days);
+        binding.btDate.setText(fromLocalDateToString(selectedDate));
     }
 
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -82,3 +149,9 @@ public class DateCounterActivity extends AppCompatActivity {
     }
 
 }
+
+/*
+If login success, saved isLogin and Username in SharedPreference!
+when login again, if isLogin is true, skip login page and go to main page!
+in main page, when click logout button, clear the shared preference and exit from the app!
+ */
